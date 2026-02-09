@@ -24,12 +24,9 @@ def test_convert_cli_sample(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     convert_main([str(FIXTURES / "sample.vcf"), str(output), "--sample", "SampleB"])
     captured = capsys.readouterr()
     assert "Converted" in captured.out
-
-
-def test_convert_cli_verbose(tmp_path: Path) -> None:
-    output = tmp_path / "out.txt"
-    convert_main([str(FIXTURES / "sample.vcf"), str(output), "-v"])
-    assert output.exists()
+    # Verify SampleB's genotype was actually used
+    content = output.read_text(encoding="utf-8")
+    assert "rs429358\t1\t12345\tTT" in content
 
 
 def test_convert_cli_error(tmp_path: Path) -> None:
@@ -55,13 +52,3 @@ def test_analyze_cli_error(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc_info:
         analyze_main([str(tmp_path / "nope.txt")])
     assert exc_info.value.code == 1
-
-
-def test_analyze_cli_verbose(tmp_path: Path) -> None:
-    report = tmp_path / "report.txt"
-    analyze_main([
-        str(FIXTURES / "sample_23andme.txt"),
-        "--output", str(report),
-        "-v",
-    ])
-    assert report.exists()

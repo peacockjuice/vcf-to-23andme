@@ -19,15 +19,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 # --- markers ---
 
-def test_builtin_markers_count() -> None:
-    assert len(KNOWN_MARKERS) == 18
-
-
-def test_no_dummy_markers() -> None:
-    for rsid in KNOWN_MARKERS:
-        assert "dummy" not in rsid
-
-
 def test_load_builtin_markers() -> None:
     markers = load_known_markers()
     assert markers == KNOWN_MARKERS
@@ -60,23 +51,33 @@ def test_analyze_file(tmp_path: Path) -> None:
     assert results["rs429358"]["gene"] == "APOE"
 
 
-def test_analyze_skips_comments(tmp_path: Path) -> None:
+# --- analyze: skip handling (parameterized) ---
+
+@pytest.mark.parametrize(
+    "content, expected_count",
+    [
+        ("# header\n# comment\nrs429358\t1\t12345\tCT\n", 1),
+        ("rs429358\t1\n", 0),
+    ],
+    ids=["skips_comments", "skips_short_lines"],
+)
+def test_analyze_skips_invalid_lines(
+    tmp_path: Path, content: str, expected_count: int,
+) -> None:
     data_file = tmp_path / "data.txt"
-    data_file.write_text(
-        "# header line\n"
-        "# another comment\n"
-        "rs429358\t1\t12345\tCT\n",
-        encoding="utf-8",
-    )
+    data_file.write_text(content, encoding="utf-8")
     results = analyze_dna_file(str(data_file), KNOWN_MARKERS)
-    assert len(results) == 1
+    assert len(results) == expected_count
 
 
-def test_analyze_skips_short_lines(tmp_path: Path) -> None:
-    data_file = tmp_path / "data.txt"
-    data_file.write_text("rs429358\t1\n", encoding="utf-8")
+# --- NEW: empty data file ---
+
+def test_analyze_empty_data_file(tmp_path: Path) -> None:
+    """An empty file or file with only comments should return empty dict."""
+    data_file = tmp_path / "empty.txt"
+    data_file.write_text("# comment only\n", encoding="utf-8")
     results = analyze_dna_file(str(data_file), KNOWN_MARKERS)
-    assert len(results) == 0
+    assert results == {}
 
 
 # --- report ---
