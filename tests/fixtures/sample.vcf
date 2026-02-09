@@ -1,0 +1,13 @@
+##fileformat=VCFv4.1
+##INFO=<ID=DB,Number=0,Type=Flag,Description="dbSNP membership">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SampleA	SampleB
+1	12345	rs429358	C	T	50	PASS	DB	GT:DP	0/1:30	1/1:25
+1	23456	rs7412	C	T	40	PASS	DB	GT:DP	0/0:20	0/1:18
+2	34567	rs1801133	G	A	60	PASS	DB	GT:DP	1/1:40	0/0:35
+3	45678	rs_indel	AT	A	30	PASS	DB	GT:DP	0/1:15	0/1:12
+4	56789	rs_missing	G	T	45	PASS	DB	GT:DP	./.:.	0/1:22
+5	67890	rs_multi	A	C,G	55	PASS	DB	GT:DP	0/1:28	1/2:30
+6	78901	rs_phased	A	G	35	PASS	DB	GT:DP	0|1:25	1|0:20
+7	89012	rs_no_gt	A	T	42	PASS	DB	DP	30	28

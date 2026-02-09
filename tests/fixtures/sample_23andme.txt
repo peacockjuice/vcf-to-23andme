@@ -1,0 +1,6 @@
+# This file was generated for 23andMe v5 import
+# rsid	chromosome	position	genotype
+rs429358	1	12345	CT
+rs7412	1	23456	CC
+rs1801133	2	34567	AA
+rs_phased	6	78901	AG

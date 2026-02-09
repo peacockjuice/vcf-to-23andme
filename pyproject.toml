@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vcf-to-23andme"
+version = "0.1.0"
+description = "Convert VCF genomic files to 23andMe v5 format and analyze genetic markers"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [{ name = "peacockjuice" }]
+keywords = ["vcf", "23andme", "genomics", "genetics", "bioinformatics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+vcf-to-23andme = "vcf_to_23andme.cli:convert_main"
+vcf-to-23andme-analyze = "vcf_to_23andme.cli:analyze_main"
+
+[project.urls]
+Homepage = "https://github.com/peacockjuice/vcf-to-23andme"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
