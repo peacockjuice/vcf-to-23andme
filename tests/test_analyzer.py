@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from vcf_to_23andme.analyzer import (
+    KNOWN_MARKERS,
     analyze_dna_file,
     generate_report,
     load_known_markers,
 )
-from vcf_to_23andme.markers import KNOWN_MARKERS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
