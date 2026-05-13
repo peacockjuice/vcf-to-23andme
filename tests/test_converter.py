@@ -32,7 +32,7 @@ def test_open_vcf(tmp_path: Path, use_gzip: bool) -> None:
 def test_convert_basic(tmp_path: Path) -> None:
     output = tmp_path / "out.txt"
     count = convert_vcf_to_23andme(str(FIXTURES / "sample.vcf"), str(output))
-    assert count == 4
+    assert count == 5
 
     expected = (FIXTURES / "sample_23andme.txt").read_text(encoding="utf-8")
     actual = output.read_text(encoding="utf-8")
@@ -43,8 +43,8 @@ def test_convert_basic(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "rsid",
-    ["rs_indel", "rs_missing", "rs_multi", "rs_no_gt"],
-    ids=["indels", "missing_genotype", "multi_allelic", "no_gt_field"],
+    ["rs_indel", "rs_missing", "rs_no_gt"],
+    ids=["indels", "missing_genotype", "no_gt_field"],
 )
 def test_skip_variants(tmp_path: Path, rsid: str) -> None:
     """Non-SNP and missing-genotype variants should not appear in output."""
@@ -100,24 +100,26 @@ def test_convert_gzip(tmp_path: Path) -> None:
 
     output = tmp_path / "out.txt"
     count = convert_vcf_to_23andme(str(gz_path), str(output))
-    assert count == 4
+    assert count == 5
 
 
-# --- NEW: allele index > 1 maps to "N" ---
+# --- NEW: unsupported genotypes are skipped ---
 
-def test_allele_index_beyond_one_maps_to_N(tmp_path: Path) -> None:
-    """When an allele index is not 0 or 1, it should be mapped to 'N'."""
+@pytest.mark.parametrize("gt", ["2/0", "0/.", "./1", "bad"])
+def test_unsupported_or_partial_genotype_is_skipped(tmp_path: Path, gt: str) -> None:
+    """Unsupported or partial GT values should not be emitted as fake data."""
     vcf = tmp_path / "allele_n.vcf"
     vcf.write_text(
         "##fileformat=VCFv4.1\n"
         "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
-        "1\t100\trs_test\tA\tG\t50\tPASS\tDB\tGT\t2/0\n",
+        f"1\t100\trs_test\tA\tG\t50\tPASS\tDB\tGT\t{gt}\n",
         encoding="utf-8",
     )
     output = tmp_path / "out.txt"
-    convert_vcf_to_23andme(str(vcf), str(output))
+    count = convert_vcf_to_23andme(str(vcf), str(output))
     content = output.read_text(encoding="utf-8")
-    assert "rs_test\t1\t100\tNA" in content
+    assert count == 0
+    assert "rs_test" not in content
 
 
 # --- NEW: phased genotype ---
@@ -154,6 +156,101 @@ def test_homozygous_ref_and_alt(tmp_path: Path) -> None:
     content = output.read_text(encoding="utf-8")
     assert "rs_homo_ref\t1\t100\tCC" in content
     assert "rs_homo_alt\t1\t200\tTT" in content
+
+
+def test_chromosome_names_are_normalized(tmp_path: Path) -> None:
+    """Common chr-prefixed chromosome names should match 23andMe-like output."""
+    vcf = tmp_path / "chroms.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.1\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
+        "chr1\t100\trs_chr1\tA\tG\t50\tPASS\tDB\tGT\t0/1\n"
+        "chrX\t200\trs_chrx\tC\tT\t50\tPASS\tDB\tGT\t1/1\n"
+        "chrY\t300\trs_chry\tG\tA\t50\tPASS\tDB\tGT\t0/0\n"
+        "chrM\t400\trs_chrm\tT\tC\t50\tPASS\tDB\tGT\t0/1\n"
+        "M\t500\trs_m\tA\tC\t50\tPASS\tDB\tGT\t1/1\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.txt"
+    convert_vcf_to_23andme(str(vcf), str(output))
+    content = output.read_text(encoding="utf-8")
+    assert "rs_chr1\t1\t100\tAG" in content
+    assert "rs_chrx\tX\t200\tTT" in content
+    assert "rs_chry\tY\t300\tGG" in content
+    assert "rs_chrm\tMT\t400\tTC" in content
+    assert "rs_m\tMT\t500\tCC" in content
+
+
+def test_marker_id_filtering(tmp_path: Path) -> None:
+    """Missing IDs are skipped, while rsIDs and internal i IDs are retained."""
+    vcf = tmp_path / "ids.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.1\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
+        "1\t100\t.\tA\tG\t50\tPASS\tDB\tGT\t0/1\n"
+        "1\t200\trs_ok\tA\tG\t50\tPASS\tDB\tGT\t0/1\n"
+        "1\t300\ti12345\tA\tG\t50\tPASS\tDB\tGT\t0/1\n"
+        "1\t400\tcustom_marker\tA\tG\t50\tPASS\tDB\tGT\t0/1\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.txt"
+    count = convert_vcf_to_23andme(str(vcf), str(output))
+    content = output.read_text(encoding="utf-8")
+    assert count == 2
+    assert "\t.\t" not in content
+    assert "rs_ok\t1\t200\tAG" in content
+    assert "i12345\t1\t300\tAG" in content
+    assert "custom_marker" not in content
+
+
+def test_custom_marker_ids_can_be_included(tmp_path: Path) -> None:
+    """Custom marker IDs should be opt-in."""
+    vcf = tmp_path / "custom_ids.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.1\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
+        "1\t100\tcustom_marker\tA\tG\t50\tPASS\tDB\tGT\t0/1\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.txt"
+    count = convert_vcf_to_23andme(
+        str(vcf), str(output), include_custom_ids=True,
+    )
+    content = output.read_text(encoding="utf-8")
+    assert count == 1
+    assert "custom_marker\t1\t100\tAG" in content
+
+
+def test_multi_allelic_snp_selected_alleles_convert(tmp_path: Path) -> None:
+    """Multi-allelic SNPs can be converted when selected alleles are simple bases."""
+    vcf = tmp_path / "multi.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.1\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
+        "1\t100\trs_multi_test\tA\tC,G\t50\tPASS\tDB\tGT\t2/0\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.txt"
+    count = convert_vcf_to_23andme(str(vcf), str(output))
+    content = output.read_text(encoding="utf-8")
+    assert count == 1
+    assert "rs_multi_test\t1\t100\tGA" in content
+
+
+def test_multi_allelic_indel_selected_allele_is_skipped(tmp_path: Path) -> None:
+    """Multi-allelic records are skipped when the selected allele is not a SNP."""
+    vcf = tmp_path / "multi_indel.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.1\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
+        "1\t100\trs_multi_indel\tA\tC,GA\t50\tPASS\tDB\tGT\t2/0\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.txt"
+    count = convert_vcf_to_23andme(str(vcf), str(output))
+    content = output.read_text(encoding="utf-8")
+    assert count == 0
+    assert "rs_multi_indel" not in content
 
 
 # --- NEW: header with too few columns ---

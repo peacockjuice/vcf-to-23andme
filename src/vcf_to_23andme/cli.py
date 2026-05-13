@@ -20,6 +20,11 @@ def convert_main(argv: list[str] | None = None) -> None:
         help="Sample name to extract (defaults to first sample)",
     )
     parser.add_argument(
+        "--include-custom-ids",
+        action="store_true",
+        help="Include marker IDs that are not rsIDs or 23andMe-style internal IDs",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable debug logging",
     )
     args = parser.parse_args(argv)
@@ -32,7 +37,12 @@ def convert_main(argv: list[str] | None = None) -> None:
     try:
         from vcf_to_23andme.converter import convert_vcf_to_23andme
 
-        count = convert_vcf_to_23andme(args.input, args.output, sample_name=args.sample)
+        count = convert_vcf_to_23andme(
+            args.input,
+            args.output,
+            sample_name=args.sample,
+            include_custom_ids=args.include_custom_ids,
+        )
         print(f"Converted {count} variants to {args.output}")
     except (ValueError, FileNotFoundError, OSError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

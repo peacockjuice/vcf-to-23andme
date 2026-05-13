@@ -15,7 +15,7 @@ def test_convert_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
     output = tmp_path / "out.txt"
     convert_main([str(FIXTURES / "sample.vcf"), str(output)])
     captured = capsys.readouterr()
-    assert "Converted 4 variants" in captured.out
+    assert "Converted 5 variants" in captured.out
     assert output.exists()
 
 
@@ -27,6 +27,23 @@ def test_convert_cli_sample(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     # Verify SampleB's genotype was actually used
     content = output.read_text(encoding="utf-8")
     assert "rs429358\t1\t12345\tTT" in content
+
+
+def test_convert_cli_include_custom_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    vcf = tmp_path / "custom_ids.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.1\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSample\n"
+        "1\t100\tcustom_marker\tA\tG\t50\tPASS\tDB\tGT\t0/1\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.txt"
+    convert_main([str(vcf), str(output), "--include-custom-ids"])
+    captured = capsys.readouterr()
+    assert "Converted 1 variants" in captured.out
+    assert "custom_marker\t1\t100\tAG" in output.read_text(encoding="utf-8")
 
 
 def test_convert_cli_error(tmp_path: Path) -> None:

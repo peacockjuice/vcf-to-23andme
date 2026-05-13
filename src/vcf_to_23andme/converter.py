@@ -5,6 +5,8 @@ from __future__ import annotations
 import gzip
 from typing import IO
 
+VALID_BASES = {"A", "C", "G", "T"}
+
 
 def open_vcf(filename: str) -> IO[str]:
     """Open a VCF file. Supports both plain .vcf and compressed .vcf.gz."""
@@ -13,10 +15,52 @@ def open_vcf(filename: str) -> IO[str]:
     return open(filename, "r", encoding="utf-8")
 
 
+def normalize_chromosome(chrom: str) -> str:
+    """Normalize common VCF chromosome names to 23andMe-like names."""
+    normalized = chrom
+    if normalized.lower().startswith("chr"):
+        normalized = normalized[3:]
+    if normalized in {"M", "m"}:
+        return "MT"
+    return normalized.upper() if normalized.upper() in {"X", "Y", "MT"} else normalized
+
+
+def is_supported_marker_id(rsid: str, include_custom_ids: bool) -> bool:
+    """Return whether a marker ID should be emitted in 23andMe-like output."""
+    if rsid == ".":
+        return False
+    return include_custom_ids or rsid.startswith(("rs", "i"))
+
+
+def resolve_genotype(gt_field: str, ref: str, alt: str) -> str | None:
+    """Resolve a VCF GT field to a 23andMe-like genotype, or None if unsupported."""
+    if gt_field in (".", "./.", ".|."):
+        return None
+
+    alleles = [ref, *alt.split(",")]
+    genotype: list[str] = []
+
+    for allele_index in gt_field.replace("|", "/").split("/"):
+        if not allele_index.isdigit():
+            return None
+
+        index = int(allele_index)
+        if index >= len(alleles):
+            return None
+
+        allele = alleles[index].upper()
+        if len(allele) != 1 or allele not in VALID_BASES:
+            return None
+        genotype.append(allele)
+
+    return "".join(genotype) if genotype else None
+
+
 def convert_vcf_to_23andme(
     input_file: str,
     output_file: str,
     sample_name: str | None = None,
+    include_custom_ids: bool = False,
 ) -> int:
     """Convert a VCF file to 23andMe v5 import format."""
     count = 0
@@ -60,13 +104,13 @@ def convert_vcf_to_23andme(
             if len(parts) < 10:
                 continue
 
-            chrom = parts[0]
+            chrom = normalize_chromosome(parts[0])
             pos = parts[1]
             rsid = parts[2]
             ref = parts[3]
             alt = parts[4]
 
-            if len(ref) != 1 or len(alt) != 1 or "," in alt:
+            if not is_supported_marker_id(rsid, include_custom_ids):
                 continue
 
             format_fields = parts[8].split(":")
@@ -83,15 +127,9 @@ def convert_vcf_to_23andme(
             if gt_field in (".", "./.", ".|."):
                 continue
 
-            alleles: list[str] = []
-            for allele in gt_field.replace("|", "/").split("/"):
-                if allele == "0":
-                    alleles.append(ref)
-                elif allele == "1":
-                    alleles.append(alt)
-                else:
-                    alleles.append("N")
-            genotype = "".join(alleles)
+            genotype = resolve_genotype(gt_field, ref, alt)
+            if genotype is None:
+                continue
 
             fout.write(f"{rsid}\t{chrom}\t{pos}\t{genotype}\n")
             count += 1
